@@ -103,6 +103,20 @@ describe('MainApp', () => {
             expect(activityHandler.processNode.called).to.be.false;
             expect(uiHandler.assignLoadMore.called).to.be.false;
         });
+
+        it('should process an activity entry when its markdown sub-node is added', () => {
+            const entry = document.createElement('div');
+            entry.classList.add('activity-entry');
+            document.body.appendChild(entry);
+            const markdown = document.createElement('div');
+            markdown.classList.add('activity-markdown');
+            entry.appendChild(markdown);
+
+            mainApp.handleAddedNode(markdown);
+
+            expect(activityHandler.processNode.calledOnce).to.be.true;
+            expect(activityHandler.processNode.calledWith(entry)).to.be.true;
+        });
     });
 
     describe('loadMoreOrReset', () => {

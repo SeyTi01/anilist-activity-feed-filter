@@ -53,6 +53,9 @@ class MainApp {
                 this.ac.processNode(node);
             } else if (node.matches(selectors.DIV.BUTTON)) {
                 this.ui.assignLoadMore(node);
+            } else if (node.matches(selectors.DIV.MARKDOWN)) {
+                const entry = node.closest(selectors.DIV.ACTIVITY);
+                if (entry) this.ac.processNode(entry);
             }
         }
     }
@@ -353,6 +356,7 @@ const selectors = {
         ACTIVITY: 'div.activity-entry',
         REPLIES: 'div.action.replies',
         LIKES: 'div.action.likes',
+        MARKDOWN: 'div.activity-markdown'
     },
     SPAN: {
         COUNT: 'span.count',
