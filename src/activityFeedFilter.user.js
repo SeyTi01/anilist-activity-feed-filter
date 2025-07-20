@@ -38,29 +38,37 @@ class MainApp {
         this.ac = activityHandler;
         this.ui = uiHandler;
         this.config = config;
+        this.URLS = {
+            home: 'https://anilist.co/home',
+            social: 'https://anilist.co/*/social',
+            profile: 'https://anilist.co/user/*/',
+            guestHome: 'https://anilist.co/social',
+        };
     }
 
-    observeMutations = (mutations) => {
+    observeMutations(mutations) {
         if (this.isAllowedUrl()) {
             mutations.forEach(mutation => mutation.addedNodes.forEach(node => this.handleAddedNode(node)));
             this.loadMoreOrReset();
         }
     }
 
-    handleAddedNode = (node) => {
-        if (node instanceof HTMLElement) {
-            if (node.matches(selectors.DIV.ACTIVITY)) {
-                this.ac.processNode(node);
-            } else if (node.matches(selectors.DIV.BUTTON)) {
-                this.ui.assignLoadMore(node);
-            } else if (node.matches(selectors.DIV.MARKDOWN)) {
-                const entry = node.closest(selectors.DIV.ACTIVITY);
-                if (entry) this.ac.processNode(entry);
-            }
+    handleAddedNode(node) {
+        if (!node instanceof HTMLElement) {
+            return;
+        }
+
+        if (node.matches(SELECTORS.DIV.ACTIVITY)) {
+            this.ac.processNode(node);
+        } else if (node.matches(SELECTORS.DIV.BUTTON)) {
+            this.ui.assignLoadMore(node);
+        } else if (node.matches(SELECTORS.DIV.MARKDOWN)) {
+            const entry = node.closest(SELECTORS.DIV.ACTIVITY);
+            if (entry) this.ac.processNode(entry);
         }
     }
 
-    loadMoreOrReset = () => {
+    loadMoreOrReset() {
         if (this.ac.currentLoadCount < this.config.options.targetLoadCount && this.ui.userPressed) {
             this.ui.clickLoadMore();
         } else {
@@ -69,7 +77,7 @@ class MainApp {
         }
     }
 
-    isAllowedUrl = () => {
+    isAllowedUrl() {
         const allowedPatterns = Object.keys(this.URLS).filter(pattern => this.config.runOn[pattern]);
 
         return allowedPatterns.some(pattern => {
@@ -78,234 +86,275 @@ class MainApp {
         });
     }
 
-    initializeObserver = () => {
-        this.observer = new MutationObserver(this.observeMutations);
+    initializeObserver() {
+        this.observer = new MutationObserver(this.observeMutations.bind(this));
         this.observer.observe(document.body, { childList: true, subtree: true });
     }
-
-    URLS = {
-        home: 'https://anilist.co/home',
-        social: 'https://anilist.co/*/social',
-        profile: 'https://anilist.co/user/*/',
-        guestHome: 'https://anilist.co/social',
-    };
 }
 
 class ActivityHandler {
     constructor(config) {
         this.currentLoadCount = 0;
         this.config = config;
-        this.linked = {
-            TRUE: 1,
-            FALSE: 0,
-            NONE: -1,
+        this.LINKED = { TRUE: 1, FALSE: 0, NONE: -1 };
+
+        const wrap = method => (node, reverse) => {
+            const res = method.call(this, node);
+            return reverse ? !res : res;
         };
+
+        const handlers = {
+            uncommented: this.evaluateUncommentedRemoval,
+            unliked: this.evaluateUnlikedRemoval,
+            text: this.evaluateTextRemoval,
+            images: this.evaluateImageRemoval,
+            gifs: this.evaluateGifRemoval,
+            videos: this.evaluateVideoRemoval,
+            containsStrings: this.evaluateStringRemoval
+        };
+
+        this.CONDITIONS_MAP = new Map(
+            Object.entries(handlers).map(
+                ([name, method]) => [name, wrap(method)]
+            )
+        );
     }
 
-    CONDITIONS_MAP = new Map([
-        ['uncommented', (node, reverse) => reverse ? !this.evaluateUncommentedRemoval(node) : this.evaluateUncommentedRemoval(node)],
-        ['unliked', (node, reverse) => reverse ? !this.evaluateUnlikedRemoval(node) : this.evaluateUnlikedRemoval(node)],
-        ['text', (node, reverse) => reverse ? !this.evaluateTextRemoval(node) : this.evaluateTextRemoval(node)],
-        ['images', (node, reverse) => reverse ? !this.evaluateImageRemoval(node) : this.evaluateImageRemoval(node)],
-        ['gifs', (node, reverse) => reverse ? !this.evaluateGifRemoval(node) : this.evaluateGifRemoval(node)],
-        ['videos', (node, reverse) => reverse ? !this.evaluateVideoRemoval(node) : this.evaluateVideoRemoval(node)],
-        ['containsStrings', (node, reverse) => this.evaluateStringRemoval(node, reverse)],
-    ]);
-
     processNode(node) {
-        const { options: { reverseConditions } } = this.config;
-        const linkedResult = this.evaluateLinkedConditions(node);
+        const { options: { reverseConditions, linkedConditions } } = this.config;
+        this.linkedConditionsFlat = linkedConditions.flat();
 
-        const shouldRemoveNode = reverseConditions
+        const linkedResult = this.evaluateLinkedConditions(node);
+        const shouldRemove = reverseConditions
             ? this.evaluateReverseConditions(node, linkedResult)
             : this.evaluateNormalConditions(node, linkedResult);
 
-        shouldRemoveNode ? node.remove() : this.currentLoadCount++;
+        shouldRemove ? node.remove() : this.currentLoadCount++;
     }
 
     evaluateLinkedConditions(node) {
         const { options: { linkedConditions } } = this.config;
-        this.linkedConditionsFlat = linkedConditions.flat();
 
         if (this.linkedConditionsFlat.length === 0) {
-            return this.linked.NONE;
+            return this.LINKED.NONE;
         }
 
-        const conditions = this.extractLinkedConditions(linkedConditions);
-        const checkResult = conditions.map(c => this.evaluateConditionList(node, c));
+        const lists = this.extractLinkedConditions(linkedConditions);
+        const results = lists.map(list => this.evaluateConditionList(node, list));
+        const hasTrue = results.some(Boolean);
+        const hasFalse = results.some(r => !r);
 
-        return (checkResult.includes(true) && (!this.config.options.reverseConditions || !checkResult.includes(false)))
-            ? this.linked.TRUE
-            : this.linked.FALSE;
+        return hasTrue && (!this.config.options.reverseConditions || !hasFalse)
+            ? this.LINKED.TRUE
+            : this.LINKED.FALSE;
     }
 
     evaluateReverseConditions(node, linkedResult) {
-        const { remove, options: { reverseConditions } } = this.config;
+        const { options: { reverseConditions } } = this.config;
+        const results = this.getActiveConditionFns().map(fn => fn(node, reverseConditions));
 
-        const checkedConditions = Array.from(this.CONDITIONS_MAP)
-            .filter(([name]) => !this.isConditionInLinked(name) && (remove[name] === true || remove[name].length > 0))
-            .map(([, condition]) => condition(node, reverseConditions));
-
-        return linkedResult !== this.linked.FALSE && !checkedConditions.includes(false)
-            && (linkedResult === this.linked.TRUE || checkedConditions.includes(true));
+        return linkedResult !== this.LINKED.FALSE
+            && !results.includes(false)
+            && (linkedResult === this.LINKED.TRUE || results.includes(true));
     }
 
     evaluateNormalConditions(node, linkedResult) {
-        const { remove, options: { reverseConditions } } = this.config;
+        const { options: { reverseConditions } } = this.config;
+        const anyMatch = this.getActiveConditionFns().some(fn => fn(node, reverseConditions));
 
-        return linkedResult === this.linked.TRUE || [...this.CONDITIONS_MAP].some(([name, condition]) =>
-            !this.isConditionInLinked(name) && remove[name] && condition(node, reverseConditions),
-        );
+        return linkedResult === this.LINKED.TRUE || anyMatch;
     }
 
-    evaluateConditionList(node, conditionList) {
+    getActiveConditionFns() {
+        const { remove } = this.config;
+
+        return [...this.CONDITIONS_MAP]
+            .filter(([name]) => {
+                if (this.linkedConditionsFlat.includes(name)) return false;
+                const cfg = remove[name];
+                return cfg === true || (Array.isArray(cfg) && cfg.flat().length > 0);
+            })
+            .map(([, fn]) => fn);
+    }
+
+    evaluateConditionList(node, list) {
         const { options: { reverseConditions } } = this.config;
 
         return reverseConditions
-            ? conditionList.some(condition => this.CONDITIONS_MAP.get(condition)(node, reverseConditions))
-            : conditionList.every(condition => this.CONDITIONS_MAP.get(condition)(node, reverseConditions));
+            ? list.some(cond => this.CONDITIONS_MAP.get(cond)(node, reverseConditions))
+            : list.every(cond => this.CONDITIONS_MAP.get(cond)(node, reverseConditions));
     }
 
     extractLinkedConditions(linkedConditions) {
-        return linkedConditions.every(condition => typeof condition === 'string')
-        && !linkedConditions.some(condition => Array.isArray(condition))
-            ? [linkedConditions]
-            : linkedConditions.map(condition => Array.isArray(condition)
-                ? condition
-                : [condition]);
+        const isNested = linkedConditions.some(Array.isArray);
+
+        return isNested
+            ? linkedConditions.map(c => Array.isArray(c) ? c : [c])
+            : [linkedConditions];
     }
 
-    isConditionInLinked(condition) {
-        return this.linkedConditionsFlat.includes(condition);
-    }
-
-    evaluateStringRemoval = (node, reversed) => {
+    evaluateStringRemoval(node) {
         const { remove: { containsStrings }, options: { caseSensitive } } = this.config;
 
-        if (containsStrings.flat().length === 0) {
-            return false;
-        }
+        const matches = substr => {
+            const text = node.textContent;
 
-        const containsString = (nodeText, strings) => !caseSensitive
-            ? nodeText.toLowerCase().includes(strings.toLowerCase())
-            : nodeText.includes(strings);
+            return caseSensitive
+                ? text.includes(substr)
+                : text.toLowerCase().includes(substr.toLowerCase());
+        };
 
-        const checkStrings = (strings) => Array.isArray(strings)
-            ? strings.every(str => containsString(node.textContent, str))
-            : containsString(node.textContent, strings);
+        return containsStrings.some(group =>
+            Array.isArray(group)
+                ? group.every(matches)
+                : matches(group)
+        );
+    }
 
-        return reversed
-            ? !containsStrings.some(checkStrings)
-            : containsStrings.some(checkStrings);
-    };
+    evaluateTextRemoval(node) {
+        const hasTextClass =
+            node.classList.contains(SELECTORS.ACTIVITY.TEXT) || node.classList.contains(SELECTORS.ACTIVITY.MESSAGE);
 
-    evaluateTextRemoval = (node) =>
-        (node.classList.contains(selectors.ACTIVITY.TEXT) || node.classList.contains(selectors.ACTIVITY.MESSAGE))
-        && !(this.evaluateImageRemoval(node) || this.evaluateGifRemoval(node) || this.evaluateVideoRemoval(node));
+        return hasTextClass && !(
+            this.evaluateImageRemoval(node) ||
+            this.evaluateGifRemoval(node) ||
+            this.evaluateVideoRemoval(node)
+        );
+    }
 
-    evaluateVideoRemoval = (node) => node?.querySelector(selectors.CLASS.VIDEO) || node?.querySelector(selectors.SPAN.YOUTUBE);
+    evaluateVideoRemoval(node) {
+        return node.querySelector(SELECTORS.CLASS.VIDEO) || node.querySelector(SELECTORS.SPAN.YOUTUBE);
+    }
 
-    evaluateImageRemoval = (node) => node?.querySelector(selectors.CLASS.IMAGE) && !node.querySelector(selectors.CLASS.IMAGE).src.includes('.gif');
+    evaluateImageRemoval(node) {
+        const img = node.querySelector(SELECTORS.CLASS.IMAGE);
 
-    evaluateGifRemoval = (node) => node?.querySelector(selectors.CLASS.IMAGE)?.src.includes('.gif');
+        return img && !img.src.includes('.gif');
+    }
 
-    evaluateUncommentedRemoval = (node) => !node.querySelector(selectors.DIV.REPLIES)?.querySelector(selectors.SPAN.COUNT);
+    evaluateGifRemoval(node) {
+        const img = node.querySelector(SELECTORS.CLASS.IMAGE);
 
-    evaluateUnlikedRemoval = (node) => !node.querySelector(selectors.DIV.LIKES)?.querySelector(selectors.SPAN.COUNT);
+        return img && img.src.includes('.gif');
+    }
 
-    resetLoadCount = () => this.currentLoadCount = 0;
+    evaluateUncommentedRemoval(node) {
+        const replies = node.querySelector(SELECTORS.DIV.REPLIES);
+
+        return !replies || !replies.querySelector(SELECTORS.SPAN.COUNT);
+    }
+
+    evaluateUnlikedRemoval(node) {
+        const likes = node.querySelector(SELECTORS.DIV.LIKES);
+
+        return !likes || !likes.querySelector(SELECTORS.SPAN.COUNT);
+    }
+
+    resetLoadCount() {
+        this.currentLoadCount = 0;
+    }
 }
 
 class UIHandler {
     constructor() {
         this.userPressed = true;
-        this.cancel = null;
-        this.loadMore = null;
+        this.loadMoreButton = null;
+        this.cancelButton = null;
     }
 
-    assignLoadMore = (button) => {
-        this.loadMore = button;
-        this.loadMore.addEventListener('click', () => {
+    assignLoadMore(button) {
+        this.loadMoreButton = button;
+        button.addEventListener('click', () => {
             this.userPressed = true;
-            this.triggerScrollEvents();
-            this.displayCancel();
+            this.triggerScroll();
+            this.showCancel();
         });
-    };
+    }
 
-    clickLoadMore = () => this.loadMore?.click() ?? null;
+    clickLoadMore() {
+        this.loadMoreButton?.click();
+    }
 
-    resetState = () => {
+    resetState() {
         this.userPressed = false;
         this.hideCancel();
-    };
-
-    displayCancel = () => {
-        this.cancel ? this.cancel.style.display = 'block' : this.createCancel();
     }
 
-    hideCancel = () => {
-        if (this.cancel) {
-            this.cancel.style.display = 'none';
+    showCancel() {
+        if (this.cancelButton) {
+            this.cancelButton.style.display = 'block';
+        } else {
+            this.createCancel();
         }
-    };
+    }
 
-    triggerScrollEvents = () => {
-        const domEvent = new Event('scroll', { bubbles: true });
-        const intervalId = setInterval(() => this.userPressed
-            ? window.dispatchEvent(domEvent)
-            : clearInterval(intervalId), 100);
-    };
+    hideCancel() {
+        if (this.cancelButton) {
+            this.cancelButton.style.display = 'none';
+        }
+    }
 
-    createCancel = () => {
-        const BUTTON_STYLE = `
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            z-index: 9999;
-            line-height: 1.3;
-            background-color: rgb(var(--color-background-blue-dark));
-            color: rgb(var(--color-text-bright));
-            font: 1.6rem 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            box-sizing: border-box;
-            --button-color: rgb(var(--color-blue));
-            `;
+    triggerScroll() {
+        const event = new Event('scroll', { bubbles: true });
+        const interval = setInterval(() => {
+            this.userPressed
+                ? window.dispatchEvent(event)
+                : clearInterval(interval);
+        }, 100);
+    }
 
-        this.cancel = Object.assign(document.createElement('button'), {
-            textContent: 'Cancel',
-            className: 'cancel-button',
-            style: BUTTON_STYLE,
-            onclick: () => {
-                this.userPressed = false;
-                this.cancel.style.display = 'none';
-            },
+    createCancel() {
+        if (this.cancelButton) {
+            this.cancelButton.style.display = 'block';
+            return;
+        }
+
+        const style =
+            `position: fixed;` +
+            `bottom: 10px;` +
+            `right: 10px;` +
+            `z-index: 9999;` +
+            `line-height: 1.3;` +
+            `background-color: rgb(var(--color-background-blue-dark));` +
+            `color: rgb(var(--color-text-bright));` +
+            `font: 1.6rem Roboto, sans-serif;` +
+            `box-sizing: border-box;`;
+
+        this.cancelButton = document.createElement('button');
+        this.cancelButton.textContent = 'Cancel';
+        this.cancelButton.className = 'cancel-button';
+        this.cancelButton.setAttribute('style', style);
+        this.cancelButton.addEventListener('click', () => {
+            this.userPressed = false;
+            this.cancelButton.style.display = 'none';
         });
 
-        document.body.appendChild(this.cancel);
-    };
+        document.body.appendChild(this.cancelButton);
+    }
 
-    showError = (message) => {
-        const ERROR_STYLE = `
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10000;
-            background-color: rgba(255, 0, 0, 0.85);
-            color: #fff;
-            padding: 12px 20px;
-            border-radius: 4px;
-            font-family: 'Roboto', sans-serif;
-            font-size: 1.4rem;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        `;
-
+    showError(message) {
         if (!this.errorContainer) {
-            this.errorContainer = Object.assign(document.createElement('div'), {
-                textContent: message,
-                className: 'config-error-message',
-                style: ERROR_STYLE,
-            });
+            const style =
+                `position: fixed;` +
+                `bottom: 10px;` +
+                `right: 10px;` +
+                `z-index: 10000;` +
+                `background-color: rgba(255,0,0,0.85);` +
+                `color: #fff;` +
+                `padding: 12px 20px;` +
+                `border-radius: 4px;` +
+                `font: 1.4rem Roboto, sans-serif;` +
+                `box-shadow: 0 2px 6px rgba(0,0,0,0.3);`;
+
+            this.errorContainer = Object.assign(
+                document.createElement('div'),
+                {
+                    textContent: message,
+                    className: 'config-error-message',
+                }
+            );
+
+            this.errorContainer.setAttribute('style', style);
             document.body.appendChild(this.errorContainer);
         } else {
             this.errorContainer.textContent = message;
@@ -317,7 +366,7 @@ class UIHandler {
                 this.errorContainer.style.display = 'none';
             }
         }, 5000);
-    };
+    }
 }
 
 class ConfigValidator {
@@ -327,65 +376,72 @@ class ConfigValidator {
     }
 
     validate() {
-        this.validatePositiveNonZeroInteger('options.targetLoadCount', 'options.targetLoadCount');
-        this.validateLinkedConditions('options.linkedConditions');
-        this.validateStringArrays(['remove.containsStrings', 'options.linkedConditions']);
-        this.validateBooleans(['remove.uncommented', 'remove.unliked', 'remove.text', 'remove.images', 'remove.gifs', 'remove.videos', 'options.caseSensitive', 'options.reverseConditions', 'runOn.home', 'runOn.social', 'runOn.profile', 'runOn.guestHome']);
+        this.validatePositiveInteger('options.targetLoadCount');
+        this.validateStringArray('remove.containsStrings');
+        this.validateStringArray('options.linkedConditions');
+        this.validateLinkedConditions();
+        this.validateBooleans([
+            'remove.uncommented',
+            'remove.unliked',
+            'remove.text',
+            'remove.images',
+            'remove.gifs',
+            'remove.videos',
+            'options.caseSensitive',
+            'options.reverseConditions',
+            'runOn.home',
+            'runOn.social',
+            'runOn.profile',
+            'runOn.guestHome'
+        ]);
 
-        if (this.errors.length > 0) {
+        if (this.errors.length) {
             throw new Error(`Anilist Activity Feed Filter: Script disabled due to configuration errors: ${this.errors.join(', ')}`);
         }
     }
 
-    validateBooleans(keys) {
-        keys.forEach(key => {
-            const value = this.getConfigValue(key);
-            typeof value !== 'boolean' ? this.errors.push(`${key} should be a boolean`) : null;
+    validatePositiveInteger(path) {
+        const value = this.get(path);
+        if (!Number.isInteger(value) || value <= 0) {
+            this.errors.push(`${path} should be a positive non-zero integer`);
+        }
+    }
+
+    validateBooleans(paths) {
+        paths.forEach(path => {
+            if (typeof this.get(path) !== 'boolean') {
+                this.errors.push(`${path} should be a boolean`);
+            }
         });
     }
 
-    validatePositiveNonZeroInteger(key, configKey) {
-        const value = this.getConfigValue(configKey);
-        if (!(value > 0 && Number.isInteger(value))) {
-            this.errors.push(`${key} should be a positive non-zero integer`);
+    validateStringArray(path) {
+        const value = this.get(path);
+        if (!Array.isArray(value)) {
+            this.errors.push(`${path} should be an array`);
+        } else if (!this.flatten(value).every(item => typeof item === 'string')) {
+            this.errors.push(`${path} should only contain strings`);
         }
     }
 
-    validateStringArrays(keys) {
-        for (const key of keys) {
-            const value = this.getConfigValue(key);
-            if (!Array.isArray(value)) {
-                this.errors.push(`${key} should be an array`);
-            } else if (!this.validateArrayContents(value)) {
-                this.errors.push(`${key} should only contain strings`);
-            }
+    validateLinkedConditions() {
+        const linked = this.flatten(this.get('options.linkedConditions'));
+        const allowed = ['uncommented', 'unliked', 'text', 'images', 'gifs', 'videos', 'containsStrings'];
+        if (linked.some(cond => !allowed.includes(cond))) {
+            this.errors.push(`options.linkedConditions should only contain: ${allowed.join(', ')}`);
         }
     }
 
-    validateArrayContents(arr) {
-        return arr.every(element => {
-            if (Array.isArray(element)) {
-                return this.validateArrayContents(element);
-            }
-            return typeof element === 'string';
-        });
+    get(path) {
+        return path.split('.').reduce((obj, key) => obj[key], this.config);
     }
 
-    validateLinkedConditions(configKey) {
-        const linkedConditions = this.getConfigValue(configKey).flat();
-        const allowedConditions = ['uncommented', 'unliked', 'text', 'images', 'gifs', 'videos', 'containsStrings'];
-
-        if (linkedConditions.some(condition => !allowedConditions.includes(condition))) {
-            this.errors.push(`${configKey} should only contain the following strings: ${allowedConditions.join(', ')}`);
-        }
-    }
-
-    getConfigValue(key) {
-        return key.split('.').reduce((value, k) => value[k], this.config);
+    flatten(arr) {
+        return arr.reduce((acc, val) => acc.concat(Array.isArray(val) ? this.flatten(val) : val), []);
     }
 }
 
-const selectors = {
+const SELECTORS = {
     DIV: {
         BUTTON: 'div.load-more',
         ACTIVITY: 'div.activity-entry',
@@ -426,4 +482,4 @@ if (require.main === module) {
     main();
 }
 
-module.exports = { MainApp, ActivityHandler, UIHandler, ConfigValidator, SELECTORS: selectors };
+module.exports = { MainApp, ActivityHandler, UIHandler, ConfigValidator, SELECTORS: SELECTORS };

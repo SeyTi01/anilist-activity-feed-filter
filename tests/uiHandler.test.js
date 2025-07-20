@@ -25,10 +25,10 @@ describe('UIHandler', () => {
         const loadMoreButton = document.createElement('button');
         uiHandler.assignLoadMore(loadMoreButton);
 
-        expect(uiHandler.loadMore).to.equal(loadMoreButton);
+        expect(uiHandler.loadMoreButton).to.equal(loadMoreButton);
 
-        const simulateDomEventsSpy = sinon.spy(uiHandler, 'triggerScrollEvents');
-        const showCancelSpy = sinon.spy(uiHandler, 'displayCancel');
+        const simulateDomEventsSpy = sinon.spy(uiHandler, 'triggerScroll');
+        const showCancelSpy = sinon.spy(uiHandler, 'showCancel');
 
         uiHandler.clickLoadMore();
 
