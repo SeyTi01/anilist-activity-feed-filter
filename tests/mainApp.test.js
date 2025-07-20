@@ -109,7 +109,7 @@ describe('MainApp', () => {
             entry.classList.add('activity-entry');
             document.body.appendChild(entry);
             const markdown = document.createElement('div');
-            markdown.classList.add('activity-markdown');
+            markdown.classList.add('markdown');
             entry.appendChild(markdown);
 
             mainApp.handleAddedNode(markdown);

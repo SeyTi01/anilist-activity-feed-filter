@@ -391,7 +391,7 @@ const selectors = {
         ACTIVITY: 'div.activity-entry',
         REPLIES: 'div.action.replies',
         LIKES: 'div.action.likes',
-        MARKDOWN: 'div.activity-markdown'
+        MARKDOWN: 'div.markdown'
     },
     SPAN: {
         COUNT: 'span.count',
