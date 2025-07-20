@@ -45,4 +45,23 @@ describe('UIHandler', () => {
 
         expect(uiHandler.userPressed).to.be.false;
     });
+
+    it('should show an error message that disappears after 5 seconds', () => {
+        const clock = sinon.useFakeTimers();
+
+        expect(document.querySelector('.config-error-message')).to.be.null;
+
+        uiHandler.showError('Test error');
+        const errorDiv = document.querySelector('.config-error-message');
+
+        expect(errorDiv).to.exist;
+        expect(errorDiv.textContent).to.equal('Test error');
+        expect(errorDiv.style.display).to.not.equal('none');
+
+        clock.tick(5000);
+
+        expect(errorDiv.style.display).to.equal('none');
+
+        clock.restore();
+    });
 });

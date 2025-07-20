@@ -280,6 +280,41 @@ class UIHandler {
 
         document.body.appendChild(this.cancel);
     };
+
+    showError = (message) => {
+        const ERROR_STYLE = `
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            background-color: rgba(255, 0, 0, 0.85);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-family: 'Roboto', sans-serif;
+            font-size: 1.4rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        `;
+
+        if (!this.errorContainer) {
+            this.errorContainer = Object.assign(document.createElement('div'), {
+                textContent: message,
+                className: 'config-error-message',
+                style: ERROR_STYLE,
+            });
+            document.body.appendChild(this.errorContainer);
+        } else {
+            this.errorContainer.textContent = message;
+            this.errorContainer.style.display = 'block';
+        }
+
+        setTimeout(() => {
+            if (this.errorContainer) {
+                this.errorContainer.style.display = 'none';
+            }
+        }, 5000);
+    };
 }
 
 class ConfigValidator {
@@ -295,7 +330,7 @@ class ConfigValidator {
         this.validateBooleans(['remove.uncommented', 'remove.unliked', 'remove.text', 'remove.images', 'remove.gifs', 'remove.videos', 'options.caseSensitive', 'options.reverseConditions', 'runOn.home', 'runOn.social', 'runOn.profile', 'runOn.guestHome']);
 
         if (this.errors.length > 0) {
-            throw new Error(`Script disabled due to configuration errors: ${this.errors.join(', ')}`);
+            throw new Error(`Anilist Activity Feed Filter: Script disabled due to configuration errors: ${this.errors.join(', ')}`);
         }
     }
 
@@ -369,14 +404,14 @@ const selectors = {
 };
 
 function main() {
+    const uiHandler = new UIHandler();
     try {
         new ConfigValidator(config).validate();
     } catch (error) {
-        console.error(error.message);
+        uiHandler.showError(error.message);
         return;
     }
 
-    const uiHandler = new UIHandler();
     const activityHandler = new ActivityHandler(config);
     const mainApp = new MainApp(activityHandler, uiHandler, config);
 
