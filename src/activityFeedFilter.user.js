@@ -54,7 +54,7 @@ class MainApp {
     }
 
     handleAddedNode(node) {
-        if (!node instanceof HTMLElement) {
+        if (!(node instanceof HTMLElement)) {
             return;
         }
 

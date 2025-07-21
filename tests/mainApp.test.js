@@ -117,6 +117,11 @@ describe('MainApp', () => {
             expect(activityHandler.processNode.calledOnce).to.be.true;
             expect(activityHandler.processNode.calledWith(entry)).to.be.true;
         });
+
+        it('should ignore non-HTMLElement nodes and not throw', () => {
+            const textNode = document.createTextNode('just text');
+            expect(() => mainApp.handleAddedNode(textNode)).to.not.throw();
+        });
     });
 
     describe('loadMoreOrReset', () => {
