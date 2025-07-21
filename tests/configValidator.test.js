@@ -32,7 +32,7 @@ describe('ConfigValidator', () => {
     const validateAndCheckErrors = (config, errorMessage) => {
         it(`should validate the configuration and throw error: ${errorMessage}`, () => {
             const validator = new ConfigValidator(config);
-            expect(() => validator.validate()).to.throw(errorMessage);
+            expect(() => validator.validateConfig()).to.throw(errorMessage);
         });
     };
 
@@ -73,9 +73,9 @@ describe('ConfigValidator', () => {
         if (errorMessage) {
             validateAndCheckErrors(config, errorMessage);
         } else {
-            it('should validate a valid configuration without errors', () => {
+            it('should validateConfig a valid configuration without errors', () => {
                 const validator = new ConfigValidator(config);
-                expect(() => validator.validate()).to.not.throw();
+                expect(() => validator.validateConfig()).to.not.throw();
             });
         }
     });

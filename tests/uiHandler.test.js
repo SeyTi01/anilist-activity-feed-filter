@@ -23,14 +23,14 @@ describe('UIHandler', () => {
 
     it('should set loadMore button and handle click', () => {
         const loadMoreButton = document.createElement('button');
-        uiHandler.assignLoadMore(loadMoreButton);
+        uiHandler.bindLoadMoreButton(loadMoreButton);
 
         expect(uiHandler.loadMoreButton).to.equal(loadMoreButton);
 
-        const simulateDomEventsSpy = sinon.spy(uiHandler, 'triggerScroll');
-        const showCancelSpy = sinon.spy(uiHandler, 'showCancel');
+        const simulateDomEventsSpy = sinon.spy(uiHandler, '_startScrollTrigger');
+        const showCancelSpy = sinon.spy(uiHandler, '_showCancelButton');
 
-        uiHandler.clickLoadMore();
+        uiHandler.triggerLoadMore();
 
         expect(simulateDomEventsSpy.calledOnce).to.be.true;
         expect(showCancelSpy.calledOnce).to.be.true;
@@ -41,7 +41,7 @@ describe('UIHandler', () => {
 
     it('should reset the state', () => {
         uiHandler.userPressed = true;
-        uiHandler.resetState();
+        uiHandler.resetUIState();
 
         expect(uiHandler.userPressed).to.be.false;
     });
@@ -51,7 +51,7 @@ describe('UIHandler', () => {
 
         expect(document.querySelector('.config-error-message')).to.be.null;
 
-        uiHandler.showError('Test error');
+        uiHandler.displayErrorMessage('Test error');
         const errorDiv = document.querySelector('.config-error-message');
 
         expect(errorDiv).to.exist;

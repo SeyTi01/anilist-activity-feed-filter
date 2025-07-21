@@ -15,16 +15,16 @@ describe('MainApp', () => {
 
     beforeEach(() => {
         activityHandler = {
-            processNode: sinon.spy(),
-            resetLoadCount: sinon.spy(),
+            processActivityNode: sinon.spy(),
+            _resetLoadCount: sinon.spy(),
             currentLoadCount: 0,
         };
 
         uiHandler = {
-            assignLoadMore: sinon.spy(),
-            clickLoadMore: sinon.spy(),
+            bindLoadMoreButton: sinon.spy(),
+            triggerLoadMore: sinon.spy(),
             userPressed: true,
-            resetState: sinon.spy(),
+            resetUIState: sinon.spy(),
         };
 
         mainApp = new MainApp(activityHandler, uiHandler, {
@@ -41,13 +41,13 @@ describe('MainApp', () => {
     });
 
     describe('observeMutations', () => {
-        it('should call handleAddedNode and loadMoreOrReset if URL is allowed', () => {
+        it('should call handleAddedNode and _processLoadOrReset if URL is allowed', () => {
             const mutations = [{ addedNodes: [document.createElement('div')] }];
-            const isAllowedUrlStub = sinon.stub(mainApp, 'isAllowedUrl').returns(true);
-            const handleAddedNodeSpy = sinon.spy(mainApp, 'handleAddedNode');
-            const loadMoreOrResetSpy = sinon.spy(mainApp, 'loadMoreOrReset');
+            const isAllowedUrlStub = sinon.stub(mainApp, '_isUrlAllowed').returns(true);
+            const handleAddedNodeSpy = sinon.spy(mainApp, '_handleAddedNode');
+            const loadMoreOrResetSpy = sinon.spy(mainApp, '_processLoadOrReset');
 
-            mainApp.observeMutations(mutations);
+            mainApp._observeMutations(mutations);
 
             expect(isAllowedUrlStub.calledOnce).to.be.true;
             expect(handleAddedNodeSpy.calledOnce).to.be.true;
@@ -58,13 +58,13 @@ describe('MainApp', () => {
             loadMoreOrResetSpy.restore();
         });
 
-        it('should not call handleAddedNode and loadMoreOrReset if URL is not allowed', () => {
+        it('should not call handleAddedNode and _processLoadOrReset if URL is not allowed', () => {
             const mutations = [{ addedNodes: [document.createElement('div')] }];
-            const isAllowedUrlStub = sinon.stub(mainApp, 'isAllowedUrl').returns(false);
-            const handleAddedNodeSpy = sinon.spy(mainApp, 'handleAddedNode');
-            const loadMoreOrResetSpy = sinon.spy(mainApp, 'loadMoreOrReset');
+            const isAllowedUrlStub = sinon.stub(mainApp, '_isUrlAllowed').returns(false);
+            const handleAddedNodeSpy = sinon.spy(mainApp, '_handleAddedNode');
+            const loadMoreOrResetSpy = sinon.spy(mainApp, '_processLoadOrReset');
 
-            mainApp.observeMutations(mutations);
+            mainApp._observeMutations(mutations);
 
             expect(isAllowedUrlStub.calledOnce).to.be.true;
             expect(handleAddedNodeSpy.called).to.be.false;
@@ -77,31 +77,31 @@ describe('MainApp', () => {
     });
 
     describe('handleAddedNode', () => {
-        it('should call ac.processNode when an activity node is added', () => {
+        it('should call ac.processActivityNode when an activity node is added', () => {
             const activityNode = document.createElement('div');
             activityNode.classList.add('activity-entry');
 
-            mainApp.handleAddedNode(activityNode);
+            mainApp._handleAddedNode(activityNode);
 
-            expect(activityHandler.processNode.calledOnce).to.be.true;
+            expect(activityHandler.processActivityNode.calledOnce).to.be.true;
         });
 
-        it('should call ui.assignLoadMore when a button node is added', () => {
+        it('should call ui.bindLoadMoreButton when a button node is added', () => {
             const buttonNode = document.createElement('div');
             buttonNode.classList.add('load-more');
 
-            mainApp.handleAddedNode(buttonNode);
+            mainApp._handleAddedNode(buttonNode);
 
-            expect(uiHandler.assignLoadMore.calledOnce).to.be.true;
+            expect(uiHandler.bindLoadMoreButton.calledOnce).to.be.true;
         });
 
-        it('should not call ac.processNode or ui.assignLoadMore for other node types', () => {
+        it('should not call ac.processActivityNode or ui.bindLoadMoreButton for other node types', () => {
             const otherNode = document.createElement('div');
 
-            mainApp.handleAddedNode(otherNode);
+            mainApp._handleAddedNode(otherNode);
 
-            expect(activityHandler.processNode.called).to.be.false;
-            expect(uiHandler.assignLoadMore.called).to.be.false;
+            expect(activityHandler.processActivityNode.called).to.be.false;
+            expect(uiHandler.bindLoadMoreButton.called).to.be.false;
         });
 
         it('should process an activity entry when its markdown sub-node is added', () => {
@@ -112,50 +112,50 @@ describe('MainApp', () => {
             markdown.classList.add('markdown');
             entry.appendChild(markdown);
 
-            mainApp.handleAddedNode(markdown);
+            mainApp._handleAddedNode(markdown);
 
-            expect(activityHandler.processNode.calledOnce).to.be.true;
-            expect(activityHandler.processNode.calledWith(entry)).to.be.true;
+            expect(activityHandler.processActivityNode.calledOnce).to.be.true;
+            expect(activityHandler.processActivityNode.calledWith(entry)).to.be.true;
         });
 
         it('should ignore non-HTMLElement nodes and not throw', () => {
             const textNode = document.createTextNode('just text');
-            expect(() => mainApp.handleAddedNode(textNode)).to.not.throw();
+            expect(() => mainApp._handleAddedNode(textNode)).to.not.throw();
         });
     });
 
-    describe('loadMoreOrReset', () => {
-        it('should call ui.clickLoadMore if currentLoadCount < targetLoadCount and userPressed is true', () => {
+    describe('_processLoadOrReset', () => {
+        it('should call ui.triggerLoadMore if currentLoadCount < targetLoadCount and userPressed is true', () => {
             activityHandler.currentLoadCount = 5;
             uiHandler.userPressed = true;
 
-            mainApp.loadMoreOrReset();
+            mainApp._processLoadOrReset();
 
-            expect(uiHandler.clickLoadMore.calledOnce).to.be.true;
+            expect(uiHandler.triggerLoadMore.calledOnce).to.be.true;
         });
 
-        it('should call ac.resetLoadCount and ui.resetLoadCount if currentLoadCount is equal to targetLoadCount and userPressed is true', () => {
+        it('should call ac.__resetLoadCount and ui.__resetLoadCount if currentLoadCount is equal to targetLoadCount and userPressed is true', () => {
             activityHandler.currentLoadCount = 10;
             uiHandler.userPressed = true;
 
-            mainApp.loadMoreOrReset();
+            mainApp._processLoadOrReset();
 
-            expect(activityHandler.resetLoadCount.calledOnce).to.be.true;
-            expect(uiHandler.resetState.calledOnce).to.be.true;
+            expect(activityHandler._resetLoadCount.calledOnce).to.be.true;
+            expect(uiHandler.resetUIState.calledOnce).to.be.true;
         });
 
-        it('should call ac.resetLoadCount and ui.resetLoadCount if currentLoadCount >= config.targetLoadCount or userPressed is false', () => {
+        it('should call ac.__resetLoadCount and ui.__resetLoadCount if currentLoadCount >= config.targetLoadCount or userPressed is false', () => {
             activityHandler.currentLoadCount = 10;
             uiHandler.userPressed = false;
 
-            mainApp.loadMoreOrReset();
+            mainApp._processLoadOrReset();
 
-            expect(activityHandler.resetLoadCount.calledOnce).to.be.true;
-            expect(uiHandler.resetState.calledOnce).to.be.true;
+            expect(activityHandler._resetLoadCount.calledOnce).to.be.true;
+            expect(uiHandler.resetUIState.calledOnce).to.be.true;
         });
     });
 
-    describe('isAllowedUrl', () => {
+    describe('_isUrlAllowed', () => {
         const testUrls = [
             'https://anilist.co/home',
             'https://anilist.co/user/username/',
@@ -170,7 +170,7 @@ describe('MainApp', () => {
 
             testUrls.forEach(url => {
                 global.window = { location: { href: url } };
-                expect(mainApp.isAllowedUrl()).to.be.false;
+                expect(mainApp._isUrlAllowed()).to.be.false;
             });
         });
 
@@ -181,7 +181,7 @@ describe('MainApp', () => {
 
             testUrls.forEach(url => {
                 global.window = { location: { href: url } };
-                expect(mainApp.isAllowedUrl()).to.be.true;
+                expect(mainApp._isUrlAllowed()).to.be.true;
             });
         });
     });
