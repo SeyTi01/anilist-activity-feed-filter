@@ -4,9 +4,9 @@
   "dependencies": {},
   "devDependencies": {
     "chai": "^5.2.1",
-    "mocha": "^11.7.1",
-    "sinon": "^21.0.0",
     "jsdom": "^26.1.0",
-    "lodash.merge": "^4.6.2"
+    "lodash.merge": "^4.6.2",
+    "mocha": "^11.7.1",
+    "sinon": "^21.0.0"
   }
 }
