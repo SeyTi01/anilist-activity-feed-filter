@@ -8,10 +8,10 @@ fs.readFile(inputFilePath, 'utf8', (err, data) => {
         console.error('Error reading input file:', err);
     } else {
         const modifiedCode = data
-            .replace(/if \(require\.main === module\) \{[\s\S]*?main\(\);[\s\S]*?}/, 'main();')
+            .replace(/if \(require\.main === module\) \{[\s\S]*?initializeApp\(\);[\s\S]*?}/, 'initializeApp();')
             .replace(/module\.exports = \{[^{}]*};/, '')
             .replace(/\/\/\s*noinspection.*(\r\n|\r|\n)/g, '')
-            .trim();
+            .trim() + '\n';
 
         fs.writeFile(outputFilePath, modifiedCode, 'utf8', (err) => {
             if (err) {
